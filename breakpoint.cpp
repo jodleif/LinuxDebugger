@@ -14,7 +14,7 @@ void dbg::Breakpoint::enable()
     saved_data = static_cast<std::uint8_t>(data & 0xFF);
     std::uint64_t int3 = 0xCC;
     std::uint64_t data_with_int3 = ((data & ~0xFF) | int3);
-    ptrace(PTRACE_POKEDATA, pid, addr, data_with_int3);
+    ptrace(PTRACE_POKETEXT, pid, addr, data_with_int3);
 
     enabled = true;
 }

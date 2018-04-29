@@ -10,6 +10,7 @@ namespace {
 int main(int argc, char const* argv[])
 {
     std::string program_name{ "to-debug" };
+    std::cout << "Size of intptr_t: " << sizeof(std::intptr_t) << '\n';
     if (argc >= 2) {
         program_name = argv[1];
     }
