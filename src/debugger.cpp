@@ -3,6 +3,7 @@
 #include "linenoise.h"
 #include "registry.h"
 #include <cassert>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <libexplain/ptrace.h>
@@ -74,6 +75,19 @@ void dbg::Debugger::continue_execution()
     wait_for_signal();
 }
 
+siginfo_t dbg::Debugger::get_signal_info()
+{
+    siginfo_t info;
+    auto res = ptrace(PTRACE_GETSIGINFO, pid, nullptr, &info);
+    if (res < 0) {
+        if constexpr (debug) {
+            int err = errno;
+            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_GETSIGINFO, pid, nullptr, nullptr));
+        }
+    }
+    return info;
+}
+
 void dbg::Debugger::run()
 {
     int wait_status;
@@ -93,7 +107,7 @@ void dbg::Debugger::set_breakpoint_at_address(std::intptr_t address)
     std::cout << "Set breakpoint at address 0x" << std::hex << address << std::endl;
     dbg::Breakpoint bp(pid, address);
     bp.enable();
-    breakpoints[address] = bp;
+    breakpoints[static_cast<std::uint64_t>(address)] = bp;
 }
 
 void dbg::Debugger::dump_registers()
@@ -141,15 +155,12 @@ void dbg::Debugger::set_program_counter(std::uint64_t pc)
 
 void dbg::Debugger::step_over_breakpoint()
 {
-    auto possible_breakpoint_location = static_cast<std::int64_t>(get_program_counter() - 1);
 
-    if (breakpoints.count(possible_breakpoint_location)) {
-        auto& bp = breakpoints[possible_breakpoint_location];
+    auto pc = get_program_counter();
+    if (breakpoints.count(pc) > 0) {
+        auto& bp = breakpoints[pc];
 
         if (bp.is_enabled()) {
-            std::uint64_t previous_instruction_address = possible_breakpoint_location;
-            set_program_counter(previous_instruction_address);
-
             bp.disable();
             ptrace(PTRACE_SINGLESTEP, pid, nullptr, nullptr);
             wait_for_signal();
@@ -163,4 +174,98 @@ void dbg::Debugger::wait_for_signal()
     int wait_status;
     auto options = 0;
     waitpid(pid, &wait_status, options);
+
+    auto siginfo = get_signal_info();
+
+    switch (siginfo.si_signo) {
+    case SIGTRAP:
+        handle_sigtrap(siginfo);
+        break;
+    case SIGSEGV:
+        std::cerr << "Segfault. Reason: " << siginfo.si_code << std::endl;
+        break;
+    default:
+        std::cout << "Got signal " << strsignal(siginfo.si_signo) << std::endl;
+    }
+}
+
+void dbg::Debugger::handle_sigtrap(siginfo_t info)
+{
+    switch (info.si_code) {
+    case SI_KERNEL:
+    case TRAP_BRKPT: {
+        set_program_counter(get_program_counter() - 1);
+        std::cout << "Hit breakpoint at address 0x" << std::hex << get_program_counter() << std::endl;
+        auto line_entry = get_line_entry_from_program_counter(get_program_counter());
+        print_source(line_entry->file->path, line_entry->line);
+        return;
+    }
+    case TRAP_TRACE:
+        return;
+    default:
+        std::cout << "Unknown SIGTRAP code " << info.si_code << std::endl;
+    }
+}
+
+dwarf::die dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter)
+{
+    for (auto& cu : dwarf.compilation_units()) {
+        if (dwarf::die_pc_range(cu.root()).contains(program_counter)) {
+            for (const auto& die : cu.root()) {
+                if (die.tag == dwarf::DW_TAG::subprogram) {
+                    if (dwarf::die_pc_range(die).contains(program_counter)) {
+                        return die;
+                    }
+                }
+            }
+        }
+    }
+    throw std::out_of_range{ "Cannot find function" };
+}
+
+dwarf::line_table::iterator dbg::Debugger::get_line_entry_from_program_counter(const std::uint64_t program_counter)
+{
+    for (auto& cu : dwarf.compilation_units()) {
+        if (dwarf::die_pc_range(cu.root()).contains(program_counter)) {
+            auto& lt = cu.get_line_table();
+            auto it = lt.find_address(program_counter);
+            if (it != lt.end()) {
+                return it;
+            }
+            break;
+        }
+    }
+    throw std::out_of_range{ "Cannot find line entry" };
+}
+
+void dbg::Debugger::print_source(const std::string& file_name, uint32_t line, uint32_t n_lines_context)
+{
+    std::ifstream file{ file_name };
+
+    auto start_line = line <= n_lines_context ? 1 : line - n_lines_context;
+    auto end_line = line + n_lines_context + (line < n_lines_context ? n_lines_context - line : 0) + 1;
+
+    char c{};
+    auto current_line{ 1u };
+
+    // skip lines to start_line
+    // TODO REWRITE
+    while (current_line != start_line && file.get(c)) {
+        if (c == '\n') {
+            ++current_line;
+        }
+    }
+
+    std::cout << (current_line == line ? "> " : "  ");
+
+    // TODO: rewrite
+    while (current_line <= end_line && file.get(c)) {
+        std::cout << c;
+        if (c == '\n') {
+            ++current_line;
+
+            std::cout << (current_line == line ? "> " : "  ");
+        }
+    }
+    std::cout << std::endl;
 }
