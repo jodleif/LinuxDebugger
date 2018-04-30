@@ -12,7 +12,7 @@ namespace dbg {
 class Debugger {
     std::string prog_name;
     pid_t pid;
-    std::unordered_map<std::uint64_t, Breakpoint> breakpoints;
+    std::unordered_map<std::intptr_t, Breakpoint> breakpoints;
     elf::elf elf;
     dwarf::dwarf dwarf;
 
@@ -21,6 +21,7 @@ class Debugger {
     siginfo_t get_signal_info();
     void wait_for_signal();
     void handle_sigtrap(siginfo_t info);
+    void single_step_instruction();
 
 public:
     Debugger(std::string _prog_name, pid_t _pid)
@@ -34,6 +35,7 @@ public:
     }
     void run();
     void set_breakpoint_at_address(std::intptr_t address);
+    void remove_breakpoint(std::intptr_t address);
     void dump_registers();
     std::uint64_t read_memory(std::uint64_t address);
     void write_memory(std::uint64_t address, std::uint64_t value);
@@ -43,5 +45,10 @@ public:
     dwarf::die get_function_from_program_counter(std::uint64_t program_counter);
     dwarf::line_table::iterator get_line_entry_from_program_counter(std::uint64_t program_counter);
     void print_source(const std::string& file_name, std::uint32_t line, std::uint32_t n_lines_context = 2);
+
+    void single_step_instruction_with_breakpoint_check();
+    void step_out();
+    void step_in();
+    void step_over();
 };
 }

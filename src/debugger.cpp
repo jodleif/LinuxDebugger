@@ -63,6 +63,16 @@ void dbg::Debugger::handle_command(const std::string& line)
             std::string val{ args[3], 2 };
             write_memory(addr_, std::stoul(val, nullptr, 16));
         }
+    } else if (is_prefix(command, "stepi")) {
+        single_step_instruction_with_breakpoint_check();
+        auto line_entry = get_line_entry_from_program_counter(get_program_counter());
+        print_source(line_entry->file->path, line_entry->line, 2);
+    } else if (is_prefix(command, "step")) {
+        step_in();
+    } else if (is_prefix(command, "next")) {
+        step_over();
+    } else if (is_prefix(command, "finish")) {
+        step_out();
     } else {
         std::cerr << "Unknown command\n";
     }
@@ -108,6 +118,15 @@ void dbg::Debugger::set_breakpoint_at_address(std::intptr_t address)
     dbg::Breakpoint bp(pid, address);
     bp.enable();
     breakpoints[static_cast<std::uint64_t>(address)] = bp;
+}
+
+void dbg::Debugger::remove_breakpoint(intptr_t address)
+{
+    assert(breakpoints.count(address) > 0);
+    if (breakpoints.at(address).is_enabled()) {
+        breakpoints.at(address).disable();
+    }
+    breakpoints.erase(address);
 }
 
 void dbg::Debugger::dump_registers()
@@ -156,14 +175,13 @@ void dbg::Debugger::set_program_counter(std::uint64_t pc)
 void dbg::Debugger::step_over_breakpoint()
 {
 
-    auto pc = get_program_counter();
+    std::intptr_t pc = get_program_counter();
     if (breakpoints.count(pc) > 0) {
         auto& bp = breakpoints[pc];
 
         if (bp.is_enabled()) {
             bp.disable();
-            ptrace(PTRACE_SINGLESTEP, pid, nullptr, nullptr);
-            wait_for_signal();
+            single_step_instruction();
             bp.enable();
         }
     }
@@ -205,6 +223,12 @@ void dbg::Debugger::handle_sigtrap(siginfo_t info)
     default:
         std::cout << "Unknown SIGTRAP code " << info.si_code << std::endl;
     }
+}
+
+void dbg::Debugger::single_step_instruction()
+{
+    ptrace(PTRACE_SINGLESTEP, pid, nullptr, nullptr);
+    wait_for_signal();
 }
 
 dwarf::die dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter)
@@ -268,4 +292,77 @@ void dbg::Debugger::print_source(const std::string& file_name, uint32_t line, ui
         }
     }
     std::cout << std::endl;
+}
+
+void dbg::Debugger::single_step_instruction_with_breakpoint_check()
+{
+    // do we need to enable and disable breakpoint?
+    if (breakpoints.count(get_program_counter()) > 0) {
+        step_over_breakpoint();
+    } else {
+        single_step_instruction();
+    }
+}
+
+void dbg::Debugger::step_out()
+{
+    auto frame_pointer = get_register_value(pid, Reg::rbp);
+    std::intptr_t return_address = read_memory(frame_pointer + 8);
+
+    bool should_remove_breakpoint{ false };
+    if (breakpoints.count(return_address) == 0) {
+        set_breakpoint_at_address(return_address);
+        should_remove_breakpoint = true;
+    }
+
+    continue_execution();
+
+    if (should_remove_breakpoint) {
+        remove_breakpoint(return_address);
+    }
+}
+
+void dbg::Debugger::step_in()
+{
+    auto line = get_line_entry_from_program_counter(get_program_counter())->line;
+
+    while (get_line_entry_from_program_counter(get_program_counter())->line == line) {
+        single_step_instruction_with_breakpoint_check();
+    }
+
+    auto line_entry = get_line_entry_from_program_counter(get_program_counter());
+    print_source(line_entry->file->path, line_entry->line);
+}
+
+void dbg::Debugger::step_over()
+{
+    auto func = get_function_from_program_counter(get_program_counter());
+    auto func_entry = dwarf::at_low_pc(func);
+    auto func_end = dwarf::at_high_pc(func);
+
+    auto line = get_line_entry_from_program_counter(func_entry);
+    auto start_line = get_line_entry_from_program_counter(get_program_counter());
+
+    std::vector<std::intptr_t> to_delete{};
+
+    while (line->address < func_end) {
+        if (line->address != start_line->address && (breakpoints.count(line->address) == 0)) {
+            set_breakpoint_at_address(line->address);
+            to_delete.push_back(line->address);
+        }
+        ++line;
+    }
+
+    auto frame_pointer = get_register_value(pid, Reg::rbp);
+    std::intptr_t return_address = read_memory(frame_pointer + 8);
+    if (breakpoints.count(return_address) == 0) {
+        set_breakpoint_at_address(return_address);
+        to_delete.push_back(return_address);
+    }
+
+    continue_execution();
+
+    for (auto addr : to_delete) {
+        remove_breakpoint(addr);
+    }
 }
