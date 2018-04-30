@@ -1,4 +1,5 @@
 #include "debugger.h"
+#include "registry.h"
 #include <iostream>
 #include <sys/ptrace.h>
 #include <unistd.h>
@@ -9,14 +10,14 @@ namespace {
 
 int main(int argc, char const* argv[])
 {
-    std::string program_name{ "to-debug" };
+    std::string program_name{};
     std::cout << "Size of intptr_t: " << sizeof(std::intptr_t) << '\n';
     if (argc >= 2) {
         program_name = argv[1];
     }
+
     auto* prog = program_name.c_str();
     auto pid = fork();
-
     if (pid == 0) {
         // child process \ execute debuggeee
         std::cout << "Child procesS!" << prog << std::endl;
