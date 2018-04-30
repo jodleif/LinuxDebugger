@@ -1,6 +1,7 @@
 #include "registry.h"
 #include "config.h"
 #include <algorithm>
+#include <cassert>
 #include <cerrno>
 #include <cstdio>
 #include <libexplain/ptrace.h>
@@ -12,7 +13,9 @@ std::size_t find_register_offset(dbg::Reg r)
 {
     auto it = std::find_if(std::begin(dbg::g_register_descriptors), std::end(dbg::g_register_descriptors),
         [r](auto&& rd) { return rd.r == r; });
-    return std::distance(std::begin(dbg::g_register_descriptors), it);
+    auto res = std::distance(std::begin(dbg::g_register_descriptors), it);
+    assert(res >= 0);
+    return static_cast<std::size_t>(res);
 }
 }
 
