@@ -12,7 +12,20 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set(HDR "include/debugger.h" "include/breakpoint.h" "include/registry.h" "include/config.h")
 set(SRC "src/main.cpp" "src/debugger.cpp" "linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")
-include_directories(linenoise)
+
 include_directories(include)
+#ignore warnings for libraries
+include_directories(SYSTEM libelfin linenoise)
+
 add_executable(${PROJECT_NAME} ${HDR} ${SRC})
-target_link_libraries(${PROJECT_NAME} explain)
+
+add_custom_target(
+    libelfin
+    COMMAND make
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/libelfin
+    BYPRODUCTS ${PROJECT_SOURCE_DIR}/libelfin/dwarf/libdwarf++.so ${PROJECT_SOURCE_DIR}/libelfin/elf/libelf++.so
+)
+add_dependencies(${PROJECT_NAME} libelfin)
+target_link_libraries(${PROJECT_NAME} explain
+                                      ${PROJECT_SOURCE_DIR}/libelfin/dwarf/libdwarf++.so
+                                      ${PROJECT_SOURCE_DIR}/libelfin/elf/libelf++.so)
