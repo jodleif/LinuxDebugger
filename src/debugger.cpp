@@ -69,11 +69,9 @@ void dbg::Debugger::handle_command(const std::string& line)
 
 void dbg::Debugger::continue_execution()
 {
+    step_over_breakpoint();
     ptrace(PTRACE_CONT, pid, nullptr, nullptr);
-
-    int wait_status;
-    int options = 0;
-    waitpid(pid, &wait_status, options);
+    wait_for_signal();
 }
 
 void dbg::Debugger::run()
@@ -129,4 +127,40 @@ std::uint64_t dbg::Debugger::read_memory(uint64_t address)
         return 0;
     }
     return static_cast<std::uint64_t>(data);
+}
+
+std::uint64_t dbg::Debugger::get_program_counter()
+{
+    return get_register_value(pid, Reg::rip);
+}
+
+void dbg::Debugger::set_program_counter(std::uint64_t pc)
+{
+    set_register_value(pid, Reg::rip, pc);
+}
+
+void dbg::Debugger::step_over_breakpoint()
+{
+    auto possible_breakpoint_location = static_cast<std::int64_t>(get_program_counter() - 1);
+
+    if (breakpoints.count(possible_breakpoint_location)) {
+        auto& bp = breakpoints[possible_breakpoint_location];
+
+        if (bp.is_enabled()) {
+            std::uint64_t previous_instruction_address = possible_breakpoint_location;
+            set_program_counter(previous_instruction_address);
+
+            bp.disable();
+            ptrace(PTRACE_SINGLESTEP, pid, nullptr, nullptr);
+            wait_for_signal();
+            bp.enable();
+        }
+    }
+}
+
+void dbg::Debugger::wait_for_signal()
+{
+    int wait_status;
+    auto options = 0;
+    waitpid(pid, &wait_status, options);
 }
