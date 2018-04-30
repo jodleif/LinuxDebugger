@@ -1,4 +1,9 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#pragma once
 
-#endif // CONFIG_H
+namespace dbg {
+#ifdef _NDEBUG
+constexpr bool debug{ true };
+#else
+constexpr bool debug{ false };
+#endif
+}

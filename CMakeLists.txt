@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 17)
 project(LinuxDebugger)
 set(CMAKE_CXX_FLAGS "-ggdb")
 
-set(HDR "include/debugger.h" "include/breakpoint.h" "include/registry.h")
+set(HDR "include/debugger.h" "include/breakpoint.h" "include/registry.h" "include/config.h")
 set(SRC "src/main.cpp" "src/debugger.cpp" "linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")
 include_directories(linenoise)
 include_directories(include)

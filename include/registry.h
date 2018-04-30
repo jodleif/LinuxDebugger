@@ -71,4 +71,5 @@ constexpr std::array<RegDescriptor, n_registers> g_register_descriptors{ { { Reg
     { Reg::gs, 55, "gs"sv } } };
 
 std::uint64_t get_register_value(pid_t pid, Reg r);
+void set_register_value(pid_t, Reg r, std::uint64_t value);
 }
