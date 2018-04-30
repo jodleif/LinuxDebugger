@@ -72,4 +72,7 @@ constexpr std::array<RegDescriptor, n_registers> g_register_descriptors{ { { Reg
 
 std::uint64_t get_register_value(pid_t pid, Reg r);
 void set_register_value(pid_t, Reg r, std::uint64_t value);
+std::uint64_t get_register_value_from_dwarf_register(pid_t pid, unsigned regnum);
+std::string_view get_register_name(Reg r);
+Reg get_register_from_name(const std::string& name);
 }

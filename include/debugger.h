@@ -21,5 +21,6 @@ public:
     }
     void run();
     void set_breakpoint_at_address(std::intptr_t address);
+    void dump_registers();
 };
 }
