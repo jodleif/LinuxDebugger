@@ -1,5 +1,9 @@
 #include "registry.h"
+#include "config.h"
 #include <algorithm>
+#include <cerrno>
+#include <cstdio>
+#include <libexplain/ptrace.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 
@@ -16,6 +20,10 @@ std::uint64_t dbg::get_register_value(const pid_t pid, const dbg::Reg r)
 {
     user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
+    if constexpr (dbg::debug) {
+        int err = errno;
+        std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_GETREGS, pid, nullptr, &regs));
+    }
 
     // TODO: improve this
     auto offset = find_register_offset(r);
@@ -26,8 +34,16 @@ void dbg::set_register_value(const pid_t pid, const dbg::Reg r, const std::uint6
 {
     user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
+    if constexpr (dbg::debug) {
+        int err = errno;
+        std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_GETREGS, pid, nullptr, &regs));
+    }
 
     auto offset = find_register_offset(r);
     *(reinterpret_cast<std::uint64_t*>(&regs) + offset) = value;
     ptrace(PTRACE_SETREGS, pid, nullptr, &regs);
+    if constexpr (dbg::debug) {
+        int err = errno;
+        std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_SETREGS, pid, nullptr, &regs));
+    }
 }

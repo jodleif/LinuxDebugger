@@ -1,9 +1,9 @@
 #pragma once
 
 namespace dbg {
-#ifdef _NDEBUG
-constexpr bool debug{ true };
-#else
+#ifdef NDEBUG
 constexpr bool debug{ false };
+#else
+constexpr bool debug{ true };
 #endif
 }

@@ -1,4 +1,5 @@
 #include "breakpoint.h"
+#include "config.h"
 #include <cerrno>
 #include <cstdio>
 #include <libexplain/ptrace.h>
@@ -7,9 +8,11 @@
 void dbg::Breakpoint::enable()
 {
     auto data = ptrace(PTRACE_PEEKDATA, pid, addr, nullptr);
-    if (data < 0) {
-        int err = errno;
-        std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_PEEKDATA, pid, reinterpret_cast<void*>(addr), nullptr));
+    if constexpr (dbg::debug) {
+        if (data < 0) {
+            int err = errno;
+            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_PEEKDATA, pid, reinterpret_cast<void*>(addr), nullptr));
+        }
     }
     saved_data = static_cast<std::uint8_t>(data & 0xFF);
     std::uint64_t int3 = 0xCC;

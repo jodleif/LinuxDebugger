@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 set(CMAKE_CXX_STANDARD 17)
 project(LinuxDebugger)
-set(CMAKE_CXX_FLAGS "-ggdb")
+# set(CMAKE_CXX_FLAGS "-ggdb")
+set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -Wall -pedantic -Wextra")
 
 set(HDR "include/debugger.h" "include/breakpoint.h" "include/registry.h" "include/config.h")
 set(SRC "src/main.cpp" "src/debugger.cpp" "linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")

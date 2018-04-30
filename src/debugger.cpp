@@ -1,4 +1,5 @@
 #include "debugger.h"
+#include "config.h"
 #include "linenoise.h"
 #include <iostream>
 #include <sstream>
