@@ -5,6 +5,7 @@
 #include <cassert>
 #include <iomanip>
 #include <iostream>
+#include <libexplain/ptrace.h>
 #include <sstream>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
@@ -50,6 +51,17 @@ void dbg::Debugger::handle_command(const std::string& line)
             std::string val{ args[3], 2 };
             set_register_value(pid, get_register_from_name(args[2]), std::stoul(val, nullptr, 16));
         }
+    } else if (is_prefix(command, "memory")) {
+        assert(args.size() > 2);
+        std::string addr{ args[2], 2 };
+        auto addr_{ std::stoul(addr, nullptr, 16) };
+        if (is_prefix(args[1], "read")) {
+            std::cout << std::hex << read_memory(addr_) << std::endl;
+        } else if (is_prefix(args[1], "write")) {
+            assert(args.size() > 3);
+            std::string val{ args[3], 2 };
+            write_memory(addr_, std::stoul(val, nullptr, 16));
+        }
     } else {
         std::cerr << "Unknown command\n";
     }
@@ -93,4 +105,28 @@ void dbg::Debugger::dump_registers()
                   << std::setfill('0') << std::setw(16) << std::hex
                   << get_register_value(pid, rd.r) << std::endl;
     }
+}
+
+void dbg::Debugger::write_memory(uint64_t address, uint64_t value)
+{
+    auto res = ptrace(PTRACE_POKEDATA, pid, address, value);
+    if (res < 0) {
+        if constexpr (debug) {
+            int err = errno;
+            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_PEEKDATA, pid, reinterpret_cast<void*>(address), nullptr));
+        }
+    }
+}
+
+std::uint64_t dbg::Debugger::read_memory(uint64_t address)
+{
+    auto data = ptrace(PTRACE_PEEKDATA, pid, address, nullptr);
+    if (data < 0) {
+        if constexpr (debug) {
+            int err = errno;
+            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_PEEKDATA, pid, reinterpret_cast<void*>(address), nullptr));
+        }
+        return 0;
+    }
+    return static_cast<std::uint64_t>(data);
 }
