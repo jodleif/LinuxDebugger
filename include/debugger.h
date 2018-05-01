@@ -36,6 +36,9 @@ public:
     void run();
     void set_breakpoint_at_address(std::intptr_t address);
     void remove_breakpoint(std::intptr_t address);
+    void set_breakpoint_at_function(const std::string& name);
+    void set_breakpoint_at_source_line(const std::string& file, const std::uint32_t line);
+
     void dump_registers();
     std::uint64_t read_memory(std::uint64_t address);
     void write_memory(std::uint64_t address, std::uint64_t value);

@@ -23,6 +23,7 @@ std::vector<std::string> split(std::string const& s, char delimiter)
     }
     return out;
 }
+
 bool is_prefix(const std::string& s, const std::string& of)
 {
     if (s.size() > of.size()) {
@@ -30,7 +31,15 @@ bool is_prefix(const std::string& s, const std::string& of)
     }
     return std::equal(s.begin(), s.end(), of.begin());
 }
+
+bool is_suffix(const std::string& s, const std::string& of)
+{
+    if (s.size() > of.size()) {
+        return false;
+    }
+    return std::equal(s.rbegin(), s.rend(), of.rbegin());
 }
+} // end anonymous namespace
 
 void dbg::Debugger::handle_command(const std::string& line)
 {
@@ -127,6 +136,36 @@ void dbg::Debugger::remove_breakpoint(intptr_t address)
         breakpoints.at(address).disable();
     }
     breakpoints.erase(address);
+}
+
+void dbg::Debugger::set_breakpoint_at_function(const std::string& name)
+{
+    for (const auto& cu : dwarf.compilation_units()) {
+        for (const auto& die : cu.root()) {
+            if (die.has(dwarf::DW_AT::name) && at_name(die) == name) {
+                auto low_pc = at_low_pc(die);
+                auto entry = get_line_entry_from_program_counter(low_pc);
+                ++entry; // skip prologue
+                set_breakpoint_at_address(entry->address);
+            }
+        }
+    }
+}
+
+void dbg::Debugger::set_breakpoint_at_source_line(const std::string& file, const uint32_t line)
+{
+    for (const auto& cu : dwarf.compilation_units()) {
+        if (is_suffix(file, at_name(cu.root()))) {
+            const auto& lt = cu.get_line_table();
+
+            for (const auto& entry : lt) {
+                if (entry.is_stmt && entry.line == line) {
+                    set_breakpoint_at_address(entry.address);
+                    return;
+                }
+            }
+        }
+    }
 }
 
 void dbg::Debugger::dump_registers()
@@ -336,10 +375,17 @@ void dbg::Debugger::step_in()
 
 void dbg::Debugger::step_over()
 {
-    auto func = get_function_from_program_counter(get_program_counter());
-    auto func_entry = dwarf::at_low_pc(func);
-    auto func_end = dwarf::at_high_pc(func);
-
+    dwarf::die func;
+    std::uint64_t func_entry, func_end{};
+    try {
+        func = get_function_from_program_counter(get_program_counter());
+        func_entry = at_low_pc(func);
+        func_end = at_high_pc(func);
+    } catch (std::out_of_range& exp) {
+        std::cerr << "Program counter: " << std::hex << get_program_counter() << std::endl;
+        std::cerr << "Out of range " << exp.what() << std::endl;
+        return;
+    }
     auto line = get_line_entry_from_program_counter(func_entry);
     auto start_line = get_line_entry_from_program_counter(get_program_counter());
 
