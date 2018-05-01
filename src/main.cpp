@@ -11,7 +11,6 @@ namespace {
 int main(int argc, char const* argv[])
 {
     std::string program_name{};
-    std::cout << "Size of intptr_t: " << sizeof(std::intptr_t) << '\n';
     if (argc >= 2) {
         program_name = argv[1];
     }
@@ -20,14 +19,13 @@ int main(int argc, char const* argv[])
     auto pid = fork();
     if (pid == 0) {
         // child process \ execute debuggeee
-        std::cout << "Child procesS!" << prog << std::endl;
+        std::cout << "Child process: [" << prog << ']' << std::endl;
         auto res = ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
         if (res < 0) {
             std::cerr << "Error in ptrace\n";
         }
         execl(prog, prog, nullptr);
     } else if (pid >= 1) {
-        std::cout << "Debugger !!! " << std::endl;
         dbg::Debugger dbg{ prog, pid };
         dbg.run();
     }

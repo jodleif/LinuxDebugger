@@ -50,8 +50,15 @@ void dbg::Debugger::handle_command(const std::string& line)
     if (is_prefix(command, "cont")) {
         continue_execution();
     } else if (is_prefix(command, "break")) {
-        std::string addr{ args[1], 2 };
-        set_breakpoint_at_address(std::stol(addr, nullptr, 16));
+        if (is_prefix("0x", args[1])) {
+            std::string addr{ args[1], 2 };
+            set_breakpoint_at_address(std::stol(addr, nullptr, 16));
+        } else if (args[1].find(':') != std::string::npos) {
+            auto file_and_line = split(args[1], ':');
+            set_breakpoint_at_source_line(file_and_line[0], static_cast<std::uint32_t>(std::stoi(file_and_line[1])));
+        } else {
+            set_breakpoint_at_function(args[1]);
+        }
     } else if (is_prefix(command, "register")) {
         if (is_prefix(args[1], "dump")) {
             dump_registers();
@@ -73,6 +80,11 @@ void dbg::Debugger::handle_command(const std::string& line)
             assert(args.size() > 3);
             std::string val{ args[3], 2 };
             write_memory(addr_, std::stoul(val, nullptr, 16));
+        }
+    } else if (is_prefix(command, "symbol")) {
+        auto syms = lookup_symbol(args[1]);
+        for (const auto& s : syms) {
+            std::cout << s.name << ' ' << to_string(s.type) << " 0x" << std::hex << s.addr << std::endl;
         }
     } else if (is_prefix(command, "stepi")) {
         single_step_instruction_with_breakpoint_check();

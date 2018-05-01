@@ -11,7 +11,7 @@ enum class SymbolType {
     section,
     file
 };
-
+// TODO FIX This ifdef is probably not working as intended.
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wswitch-default"
 #endif

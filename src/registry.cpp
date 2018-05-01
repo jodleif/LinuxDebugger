@@ -10,8 +10,6 @@
 #include <sys/user.h>
 
 namespace {
-// TODO: improve find_register_offset, potentially UB
-
 class RegsAccessor {
     user_regs_struct* regs;
 
@@ -22,6 +20,7 @@ public:
     {
     }
 
+// TODO FIX This ifdef is probably not working as intended.
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wswitch-default"
 #endif
