@@ -5,33 +5,33 @@
 #include <string_view>
 namespace dbg {
 enum class Reg {
-    rax,
-    rbx,
-    rcx,
-    rdx,
-    rdi,
-    rsi,
-    rbp,
-    rsp,
-    r8,
-    r9,
-    r10,
-    r11,
-    r12,
-    r13,
-    r14,
-    r15,
-    rip,
-    rflags,
-    cs,
-    orig_rax,
-    fs_base,
-    gs_base,
-    fs,
-    gs,
-    ss,
-    ds,
-    es
+    rax = 10,
+    rbx = 5,
+    rcx = 11,
+    rdx = 12,
+    rdi = 14,
+    rsi = 13,
+    rbp = 4,
+    rsp = 19,
+    r8 = 9,
+    r9 = 8,
+    r10 = 7,
+    r11 = 6,
+    r12 = 3,
+    r13 = 2,
+    r14 = 1,
+    r15 = 0,
+    rip = 16,
+    eflags = 18,
+    cs = 17,
+    orig_rax = 15,
+    fs_base = 21,
+    gs_base = 22,
+    fs = 25,
+    gs = 26,
+    ss = 20,
+    ds = 23,
+    es = 24
 };
 
 constexpr std::size_t n_registers{ 27 };
@@ -41,8 +41,11 @@ struct RegDescriptor {
     const std::int32_t dwarf_r;
     const std::string_view name;
 };
+
 using namespace std::string_view_literals;
-constexpr std::array<RegDescriptor, n_registers> g_register_descriptors{ { { Reg::r15, 15, "r15"sv },
+// clang-format off
+constexpr std::array<RegDescriptor, n_registers> g_register_descriptors
+{ { { Reg::r15, 15, "r15"sv },
     { Reg::r14, 14, "r14"sv },
     { Reg::r13, 13, "r13"sv },
     { Reg::r12, 12, "r12"sv },
@@ -60,7 +63,7 @@ constexpr std::array<RegDescriptor, n_registers> g_register_descriptors{ { { Reg
     { Reg::orig_rax, -1, "orig_rax"sv },
     { Reg::rip, -1, "rip"sv },
     { Reg::cs, 51, "cs"sv },
-    { Reg::rflags, 49, "eflags"sv },
+    { Reg::eflags, 49, "eflags"sv },
     { Reg::rsp, 7, "rsp"sv },
     { Reg::ss, 52, "ss"sv },
     { Reg::fs_base, 58, "fs_base"sv },
@@ -69,7 +72,7 @@ constexpr std::array<RegDescriptor, n_registers> g_register_descriptors{ { { Reg
     { Reg::es, 50, "es"sv },
     { Reg::fs, 54, "fs"sv },
     { Reg::gs, 55, "gs"sv } } };
-
+// clang-format on
 std::uint64_t get_register_value(pid_t pid, Reg r);
 void set_register_value(pid_t, Reg r, std::uint64_t value);
 std::uint64_t get_register_value_from_dwarf_register(pid_t pid, unsigned regnum);
