@@ -12,21 +12,21 @@ set(CMAKE_CXX_FLAGS_DEBUG "-ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set(HDR include/debugger.h include/breakpoint.h include/registry.h include/config.h include/symbol_type.h)
-set(SRC "src/main.cpp" "src/debugger.cpp" "linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")
+set(SRC "src/main.cpp" "src/debugger.cpp" "submodules/linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")
 
 include_directories(include)
 #ignore warnings for libraries
-include_directories(SYSTEM libelfin linenoise)
+include_directories(SYSTEM submodules/libelfin submodules/linenoise)
 
 add_executable(${PROJECT_NAME} ${HDR} ${SRC})
 
 add_custom_target(
     libelfin
     COMMAND make
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/libelfin
-    BYPRODUCTS ${PROJECT_SOURCE_DIR}/libelfin/dwarf/libdwarf++.so ${PROJECT_SOURCE_DIR}/libelfin/elf/libelf++.so
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/submodules/libelfin
+    BYPRODUCTS ${PROJECT_SOURCE_DIR}/submodules/libelfin/dwarf/libdwarf++.so ${PROJECT_SOURCE_DIR}/submodules/libelfin/elf/libelf++.so
 )
 add_dependencies(${PROJECT_NAME} libelfin)
 target_link_libraries(${PROJECT_NAME} explain
-                                      ${PROJECT_SOURCE_DIR}/libelfin/dwarf/libdwarf++.so
-                                      ${PROJECT_SOURCE_DIR}/libelfin/elf/libelf++.so)
+                                      ${PROJECT_SOURCE_DIR}/submodules/libelfin/dwarf/libdwarf++.so
+                                      ${PROJECT_SOURCE_DIR}/submodules/libelfin/elf/libelf++.so)
