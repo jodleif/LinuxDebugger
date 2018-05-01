@@ -12,6 +12,9 @@ enum class SymbolType {
     file
 };
 
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wswitch-default"
+#endif
 inline const std::string to_string(SymbolType at)
 {
     using namespace std::string_literals;
@@ -29,6 +32,9 @@ inline const std::string to_string(SymbolType at)
     }
     return "";
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 inline constexpr SymbolType to_symbol_type(elf::stt sym)
 {

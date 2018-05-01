@@ -22,8 +22,14 @@ public:
     {
     }
 
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wswitch-default"
+#endif
+    // function enumerates all possibilities
     unsigned long long& operator[](dbg::Reg r)
     {
+        // double check since warning disabled
+        static_assert(dbg::n_registers == sizeof(user_regs_struct) / sizeof(std::size_t));
         switch (r) {
         case dbg::Reg::rax:
             return std::ref(regs->rax);
@@ -82,6 +88,9 @@ public:
         }
         throw std::out_of_range{ "[RegAccessor] invalid Reg" };
     }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
     // user_regs_struct* operator()() { return regs; }
 };
 

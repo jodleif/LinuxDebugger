@@ -10,7 +10,7 @@
 
 namespace dbg {
 //forward decl
-class Symbol;
+struct Symbol;
 
 class Debugger {
     std::string prog_name;
