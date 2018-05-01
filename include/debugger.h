@@ -59,5 +59,7 @@ public:
     void step_out();
     void step_in();
     void step_over();
+
+    std::vector<std::string> all_source_files();
 };
 } // end namespace dbg

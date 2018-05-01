@@ -49,6 +49,11 @@ void dbg::Debugger::handle_command(const std::string& line)
     auto command = args[0];
     if (is_prefix(command, "cont")) {
         continue_execution();
+    } else if (is_prefix(command, "filenames")) {
+        auto srcs = all_source_files();
+        std::for_each(std::begin(srcs), std::end(srcs), [](const auto& str) {
+            std::cout << str << '\n';
+        });
     } else if (is_prefix(command, "break")) {
         if (is_prefix("0x", args[1])) {
             std::string addr{ args[1], 2 };
@@ -449,4 +454,13 @@ void dbg::Debugger::step_over()
     for (auto addr : to_delete) {
         remove_breakpoint(addr);
     }
+}
+
+std::vector<std::string> dbg::Debugger::all_source_files()
+{
+    std::vector<std::string> srcs{};
+    for (const auto& entry : dwarf.compilation_units()) {
+        srcs.push_back(at_name(entry.root()));
+    }
+    return srcs;
 }
