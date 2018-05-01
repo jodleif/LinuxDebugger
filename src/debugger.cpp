@@ -101,6 +101,8 @@ void dbg::Debugger::handle_command(const std::string& line)
         step_over();
     } else if (is_prefix(command, "finish")) {
         step_out();
+    } else if (is_prefix(command, "backtrace")) {
+        print_backtrace();
     } else {
         std::cerr << "Unknown command\n";
     }
@@ -316,10 +318,10 @@ void dbg::Debugger::single_step_instruction()
 dwarf::die dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter)
 {
     for (auto& cu : dwarf.compilation_units()) {
-        if (dwarf::die_pc_range(cu.root()).contains(program_counter)) {
+        if (die_pc_range(cu.root()).contains(program_counter)) {
             for (const auto& die : cu.root()) {
                 if (die.tag == dwarf::DW_TAG::subprogram) {
-                    if (dwarf::die_pc_range(die).contains(program_counter)) {
+                    if (die_pc_range(die).contains(program_counter)) {
                         return die;
                     }
                 }
@@ -332,7 +334,7 @@ dwarf::die dbg::Debugger::get_function_from_program_counter(std::uint64_t progra
 dwarf::line_table::iterator dbg::Debugger::get_line_entry_from_program_counter(const std::uint64_t program_counter)
 {
     for (auto& cu : dwarf.compilation_units()) {
-        if (dwarf::die_pc_range(cu.root()).contains(program_counter)) {
+        if (die_pc_range(cu.root()).contains(program_counter)) {
             auto& lt = cu.get_line_table();
             auto it = lt.find_address(program_counter);
             if (it != lt.end()) {
@@ -463,4 +465,33 @@ std::vector<std::string> dbg::Debugger::all_source_files()
         srcs.push_back(at_name(entry.root()));
     }
     return srcs;
+}
+
+void dbg::Debugger::print_backtrace()
+{
+    auto output_frame = [frame_number = 0](auto&& func) mutable
+    {
+        auto low_pc = [&func]() {
+            try {
+                return dwarf::at_low_pc(func);
+            } catch (const std::out_of_range& e) {
+                return dwarf::taddr{ 0 };
+            }
+        };
+        std::cout << "frame #" << frame_number++ << ": 0x" << low_pc()
+                  << ' ' << dwarf::at_name(func) << std::endl;
+    };
+
+    auto current_func = get_function_from_program_counter(get_program_counter());
+    output_frame(current_func);
+
+    auto frame_pointer = get_register_value(pid, Reg::rbp);
+    auto return_address = read_memory(frame_pointer + 8);
+
+    while (dwarf::at_name(current_func) != "main") {
+        current_func = get_function_from_program_counter(return_address);
+        output_frame(current_func);
+        frame_pointer = read_memory(frame_pointer);
+        return_address = read_memory(frame_pointer + 8);
+    }
 }

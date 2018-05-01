@@ -61,5 +61,7 @@ public:
     void step_over();
 
     std::vector<std::string> all_source_files();
+
+    void print_backtrace();
 };
 } // end namespace dbg
