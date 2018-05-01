@@ -6,4 +6,4 @@ constexpr bool debug{ false };
 #else
 constexpr bool debug{ true };
 #endif
-}
+} // end namespace dbg

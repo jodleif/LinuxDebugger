@@ -2,6 +2,8 @@
 #include "config.h"
 #include "linenoise.h"
 #include "registry.h"
+#include "symbol_type.h"
+#include <algorithm>
 #include <cassert>
 #include <fstream>
 #include <iomanip>
@@ -126,7 +128,7 @@ void dbg::Debugger::set_breakpoint_at_address(std::intptr_t address)
     std::cout << "Set breakpoint at address 0x" << std::hex << address << std::endl;
     dbg::Breakpoint bp(pid, address);
     bp.enable();
-    breakpoints[static_cast<std::uint64_t>(address)] = bp;
+    breakpoints[address] = bp;
 }
 
 void dbg::Debugger::remove_breakpoint(intptr_t address)
@@ -146,7 +148,7 @@ void dbg::Debugger::set_breakpoint_at_function(const std::string& name)
                 auto low_pc = at_low_pc(die);
                 auto entry = get_line_entry_from_program_counter(low_pc);
                 ++entry; // skip prologue
-                set_breakpoint_at_address(entry->address);
+                set_breakpoint_at_address(static_cast<std::intptr_t>(entry->address));
             }
         }
     }
@@ -160,7 +162,7 @@ void dbg::Debugger::set_breakpoint_at_source_line(const std::string& file, const
 
             for (const auto& entry : lt) {
                 if (entry.is_stmt && entry.line == line) {
-                    set_breakpoint_at_address(entry.address);
+                    set_breakpoint_at_address(static_cast<std::intptr_t>(entry.address));
                     return;
                 }
             }
@@ -225,6 +227,11 @@ std::uint64_t dbg::Debugger::get_program_counter()
     return get_register_value(pid, Reg::rip);
 }
 
+std::intptr_t dbg::Debugger::get_program_counteri()
+{
+    return static_cast<std::intptr_t>(get_program_counter());
+}
+
 void dbg::Debugger::set_program_counter(std::uint64_t pc)
 {
     set_register_value(pid, Reg::rip, pc);
@@ -233,7 +240,7 @@ void dbg::Debugger::set_program_counter(std::uint64_t pc)
 void dbg::Debugger::step_over_breakpoint()
 {
 
-    std::intptr_t pc = get_program_counter();
+    auto pc = get_program_counteri();
     if (breakpoints.count(pc) > 0) {
         auto& bp = breakpoints[pc];
 
@@ -355,7 +362,7 @@ void dbg::Debugger::print_source(const std::string& file_name, uint32_t line, ui
 void dbg::Debugger::single_step_instruction_with_breakpoint_check()
 {
     // do we need to enable and disable breakpoint?
-    if (breakpoints.count(get_program_counter()) > 0) {
+    if (breakpoints.count(get_program_counteri()) > 0) {
         step_over_breakpoint();
     } else {
         single_step_instruction();
@@ -365,7 +372,7 @@ void dbg::Debugger::single_step_instruction_with_breakpoint_check()
 void dbg::Debugger::step_out()
 {
     auto frame_pointer = get_register_value(pid, Reg::rbp);
-    std::intptr_t return_address = read_memory(frame_pointer + 8);
+    auto return_address = static_cast<std::intptr_t>(read_memory(frame_pointer + 8));
 
     bool should_remove_breakpoint{ false };
     if (breakpoints.count(return_address) == 0) {
@@ -411,15 +418,15 @@ void dbg::Debugger::step_over()
     std::vector<std::intptr_t> to_delete{};
 
     while (line->address < func_end) {
-        if (line->address != start_line->address && (breakpoints.count(line->address) == 0)) {
-            set_breakpoint_at_address(line->address);
-            to_delete.push_back(line->address);
+        if (auto laddr = static_cast<std::intptr_t>(line->address); line->address != start_line->address && (breakpoints.count(laddr) == 0)) {
+            set_breakpoint_at_address(laddr);
+            to_delete.push_back(laddr);
         }
         ++line;
     }
 
     auto frame_pointer = get_register_value(pid, Reg::rbp);
-    std::intptr_t return_address = read_memory(frame_pointer + 8);
+    auto return_address = static_cast<std::intptr_t>(read_memory(frame_pointer + 8));
     if (breakpoints.count(return_address) == 0) {
         set_breakpoint_at_address(return_address);
         to_delete.push_back(return_address);

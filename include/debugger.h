@@ -48,6 +48,7 @@ public:
     std::uint64_t read_memory(std::uint64_t address);
     void write_memory(std::uint64_t address, std::uint64_t value);
     std::uint64_t get_program_counter();
+    std::intptr_t get_program_counteri();
     void set_program_counter(std::uint64_t pc);
     void step_over_breakpoint();
     dwarf::die get_function_from_program_counter(std::uint64_t program_counter);
@@ -59,4 +60,4 @@ public:
     void step_in();
     void step_over();
 };
-}
+} // end namespace dbg

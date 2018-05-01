@@ -1,4 +1,5 @@
 #pragma once
+
 #include <elf/elf++.hh>
 #include <string_view>
 
@@ -11,7 +12,7 @@ enum class SymbolType {
     file
 };
 
-const std::string to_string(SymbolType at)
+inline const std::string to_string(SymbolType at)
 {
     using namespace std::string_literals;
     switch (at) {
@@ -26,9 +27,10 @@ const std::string to_string(SymbolType at)
     case SymbolType::file:
         return "file"s;
     }
+    return "";
 }
 
-constexpr SymbolType to_symbol_type(elf::stt sym)
+inline constexpr SymbolType to_symbol_type(elf::stt sym)
 {
     switch (sym) {
     case elf::stt::notype:
@@ -44,7 +46,6 @@ constexpr SymbolType to_symbol_type(elf::stt sym)
     default:
         return SymbolType::notype;
     }
-    static_assert(false, "Should not arrive here");
 }
 
 struct Symbol {
@@ -52,4 +53,4 @@ struct Symbol {
     std::string name;
     std::uintptr_t addr;
 };
-}
+} // end namespace dbg

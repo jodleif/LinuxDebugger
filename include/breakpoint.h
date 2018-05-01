@@ -24,4 +24,4 @@ public:
     auto is_enabled() const -> bool { return enabled; }
     auto get_address() const -> std::intptr_t { return addr; }
 };
-}
+} // end namespace dbg
