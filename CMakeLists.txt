@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 11)
 project(LinuxDebugger)
 
 
@@ -10,7 +11,7 @@ set(CMAKE_CXX_FLAGS "-march=native -mtune=native ${GCC_WARNINGS}")
 set(CMAKE_CXX_FLAGS_DEBUG "-ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-set(HDR "include/debugger.h" "include/breakpoint.h" "include/registry.h" "include/config.h")
+set(HDR include/debugger.h include/breakpoint.h include/registry.h include/config.h include/symbol_type.h)
 set(SRC "src/main.cpp" "src/debugger.cpp" "linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")
 
 include_directories(include)

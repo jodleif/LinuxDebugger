@@ -9,6 +9,9 @@
 #include <unordered_map>
 
 namespace dbg {
+//forward decl
+class Symbol;
+
 class Debugger {
     std::string prog_name;
     pid_t pid;
@@ -38,6 +41,8 @@ public:
     void remove_breakpoint(std::intptr_t address);
     void set_breakpoint_at_function(const std::string& name);
     void set_breakpoint_at_source_line(const std::string& file, const std::uint32_t line);
+
+    std::vector<Symbol> lookup_symbol(const std::string& name);
 
     void dump_registers();
     std::uint64_t read_memory(std::uint64_t address);

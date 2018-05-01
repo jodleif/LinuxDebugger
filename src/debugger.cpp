@@ -168,6 +168,25 @@ void dbg::Debugger::set_breakpoint_at_source_line(const std::string& file, const
     }
 }
 
+std::vector<dbg::Symbol> dbg::Debugger::lookup_symbol(const std::string& name)
+{
+    std::vector<Symbol> syms;
+
+    for (const auto& sec : elf.sections()) {
+        if (auto type = sec.get_hdr().type; type != elf::sht::symtab && type != elf::sht::dynsym) {
+            continue;
+        }
+
+        for (const auto& sym : sec.as_symtab()) {
+            if (sym.get_name() == name) {
+                auto& d = sym.get_data();
+                syms.push_back(Symbol{ to_symbol_type(d.type()), sym.get_name(), d.value });
+            }
+        }
+    }
+    return syms;
+}
+
 void dbg::Debugger::dump_registers()
 {
     for (const auto& rd : g_register_descriptors) {
