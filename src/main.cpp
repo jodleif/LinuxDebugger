@@ -1,6 +1,7 @@
 #include "debugger.h"
 #include "registry.h"
 #include <iostream>
+#include <sys/personality.h>
 #include <sys/ptrace.h>
 #include <unistd.h>
 #include <utility>
@@ -19,6 +20,7 @@ int main(int argc, char const* argv[])
     auto pid = fork();
     if (pid == 0) {
         // child process \ execute debuggeee
+        personality(ADDR_NO_RANDOMIZE);
         std::cout << "Child process: [" << prog << ']' << std::endl;
         auto res = ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
         if (res < 0) {
