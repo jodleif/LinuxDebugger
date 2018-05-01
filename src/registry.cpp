@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
-#include <cstdio>
 #include <functional>
+#include <iostream>
 #include <libexplain/ptrace.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
@@ -80,25 +80,21 @@ public:
         case dbg::Reg::es:
             return std::ref(regs->es);
         }
-        throw std::out_of_range{ "invalid Reg" };
+        throw std::out_of_range{ "[RegAccessor] invalid Reg" };
     }
     // user_regs_struct* operator()() { return regs; }
 };
 
-std::size_t find_register_offset(dbg::Reg r)
-{
-    return static_cast<std::size_t>(r);
-}
-}
+} // end anonymous namespace
 
 std::uint64_t dbg::get_register_value(const pid_t pid, const dbg::Reg r)
 {
-    user_regs_struct regs;
+    user_regs_struct regs{};
     auto data = ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
     if constexpr (dbg::debug) {
         if (data < 0) {
             int err = errno;
-            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_GETREGS, pid, nullptr, &regs));
+            std::cerr << explain_errno_ptrace(err, PTRACE_GETREGS, pid, nullptr, &regs) << std::endl;
         }
     }
     auto acc = RegsAccessor{ &regs };
@@ -108,12 +104,12 @@ std::uint64_t dbg::get_register_value(const pid_t pid, const dbg::Reg r)
 
 void dbg::set_register_value(const pid_t pid, const dbg::Reg r, const std::uint64_t value)
 {
-    user_regs_struct regs;
+    user_regs_struct regs{};
     auto data = ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
     if constexpr (dbg::debug) {
         if (data < 0) {
             int err = errno;
-            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_GETREGS, pid, nullptr, &regs));
+            std::cerr << explain_errno_ptrace(err, PTRACE_GETREGS, pid, nullptr, &regs) << std::endl;
         }
     }
 
@@ -123,7 +119,7 @@ void dbg::set_register_value(const pid_t pid, const dbg::Reg r, const std::uint6
     if constexpr (dbg::debug) {
         if (data < 0) {
             int err = errno;
-            std::fprintf(stderr, "%s\n", explain_errno_ptrace(err, PTRACE_SETREGS, pid, nullptr, &regs));
+            std::cerr << explain_errno_ptrace(err, PTRACE_SETREGS, pid, nullptr, &regs) << std::endl;
         }
     }
 }
@@ -139,9 +135,9 @@ std::uint64_t dbg::get_register_value_from_dwarf_register(pid_t pid, unsigned re
     return get_register_value(pid, it->r);
 }
 
-std::string_view dbg::get_register_name(dbg::Reg r)
+std::string_view dbg::get_register_name(const dbg::Reg r)
 {
-    auto idx = static_cast<std::size_t>(r);
+    const auto idx = static_cast<std::size_t>(r);
     assert(idx < n_registers);
     const auto& desc = g_register_descriptors[idx];
     return desc.name;
