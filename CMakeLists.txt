@@ -11,8 +11,8 @@ set(CMAKE_CXX_FLAGS "-march=native -mtune=native ${GCC_WARNINGS}")
 set(CMAKE_CXX_FLAGS_DEBUG "-ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-set(HDR include/debugger.h include/breakpoint.h include/registry.h include/config.h include/symbol_type.h)
-set(SRC "src/main.cpp" "src/debugger.cpp" "submodules/linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp")
+set(HDR "include/debugger.h" "include/breakpoint.h" "include/registry.h" "include/config.h" "include/symbol_type.h" "include/elfin_ext.h")
+set(SRC "src/main.cpp" "src/debugger.cpp" "submodules/linenoise/linenoise.c" "src/breakpoint.cpp" "src/registry.cpp" "src/elfin_ext.cpp")
 
 include_directories(include)
 #ignore warnings for libraries

@@ -1,6 +1,6 @@
 #include "debugger.h"
 #include "config.h"
-#include "linenoise.h"
+#include "elfin_ext.h"
 #include "registry.h"
 #include "symbol_type.h"
 #include <algorithm>
@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <iostream>
 #include <libexplain/ptrace.h>
+#include <linenoise.h>
 #include <sstream>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
@@ -103,6 +104,8 @@ void dbg::Debugger::handle_command(const std::string& line)
         step_out();
     } else if (is_prefix(command, "backtrace")) {
         print_backtrace();
+    } else if (is_prefix(command, "vars")) {
+        read_variables();
     } else {
         std::cerr << "Unknown command\n";
     }
@@ -228,7 +231,7 @@ void dbg::Debugger::write_memory(uint64_t address, uint64_t value)
     }
 }
 
-std::uint64_t dbg::Debugger::read_memory(uint64_t address)
+std::uint64_t dbg::Debugger::read_memory(uint64_t address) const
 {
     auto data = ptrace(PTRACE_PEEKDATA, pid, address, nullptr);
     if (data < 0) {
@@ -241,12 +244,12 @@ std::uint64_t dbg::Debugger::read_memory(uint64_t address)
     return static_cast<std::uint64_t>(data);
 }
 
-std::uint64_t dbg::Debugger::get_program_counter()
+std::uint64_t dbg::Debugger::get_program_counter() const
 {
     return get_register_value(pid, Reg::rip);
 }
 
-std::uint64_t dbg::Debugger::get_program_counter_minus_offset()
+std::uint64_t dbg::Debugger::get_program_counter_minus_offset() const
 {
     return get_program_counter() - static_cast<std::uint64_t>(base_offset);
 }
@@ -325,15 +328,23 @@ bool dbg::Debugger::determine_if_aslr_offset() const
     auto x = lookup_symbol("main");
     if (!x.empty()) {
         auto& a = *x.begin();
-        std::cerr << "Determining if aslr_offset needs to be applied: 0x" << std::hex << a.addr << '\n';
+        if constexpr (debug) {
+            std::cerr << "Determining if aslr_offset needs to be applied: 0x" << std::hex << a.addr;
+        }
         if (a.addr < 0x400000) {
+            if constexpr (debug) {
+                std::cerr << " : yes" << std::endl;
+            }
             return true;
         }
+    }
+    if constexpr (debug) {
+        std::cerr << " : no" << std::endl;
     }
     return false;
 }
 
-std::optional<dwarf::die> dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter)
+dwarf::die dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter) const
 {
     for (auto& cu : dwarf.compilation_units()) {
         if (die_pc_range(cu.root()).contains(program_counter)) {
@@ -343,7 +354,7 @@ std::optional<dwarf::die> dbg::Debugger::get_function_from_program_counter(std::
                         // This way of checking is shown in examples of libelfin
                         // (you can expect a ratio of 10:1 exceptions to matches)
                         if (dwarf::die_pc_range(die).contains(program_counter)) {
-                            return std::make_optional(die);
+                            return die;
                         }
                     } catch (const std::exception& e) {
                         // nasty
@@ -352,7 +363,7 @@ std::optional<dwarf::die> dbg::Debugger::get_function_from_program_counter(std::
             }
         }
     }
-    return {};
+    throw std::out_of_range{ "Cannot find function. That's exceptional..." };
 }
 
 dwarf::line_table::iterator dbg::Debugger::get_line_entry_from_program_counter(const std::uint64_t program_counter)
@@ -445,17 +456,8 @@ void dbg::Debugger::step_in()
 void dbg::Debugger::step_over()
 {
     std::uint64_t func_entry, func_end{};
-    auto ofunc = get_function_from_program_counter(get_program_counter_minus_offset());
-    dwarf::die func;
-    if (ofunc) {
-        func = *ofunc;
-    } else {
-        if constexpr (debug) {
-            std::cerr << "[step_over] "
-                      << "cannot find function\n";
-        }
-        return;
-    }
+    auto func = get_function_from_program_counter(get_program_counter_minus_offset());
+
     try {
         func_entry = at_low_pc(func);
         func_end = at_high_pc(func);
@@ -502,6 +504,43 @@ std::vector<std::string> dbg::Debugger::all_source_files()
     return srcs;
 }
 
+void dbg::Debugger::read_variables() const
+{
+    auto func = get_function_from_program_counter(get_program_counter_minus_offset());
+
+    for (const auto& die : func) {
+        if (die.tag == dwarf::DW_TAG::variable) {
+            auto loc_val = die[dwarf::DW_AT::location];
+
+            if (loc_val.get_type() == dwarf::value::type::exprloc) {
+                ptrace_expr_context context{ pid };
+
+                dwarf::expr_result result;
+                try {
+                    result = loc_val.as_exprloc().evaluate(&context);
+                } catch (const std::runtime_error& e) {
+                    std::cerr << "Not implemented: " << e.what() << '\n';
+                    continue;
+                }
+                switch (result.location_type) {
+                case dwarf::expr_result::type::address: {
+                    auto value = read_memory(result.value);
+                    std::cout << at_name(die) << " (0x" << std::hex << result.value << ") = " << value << std::endl;
+                    break;
+                }
+                case dwarf::expr_result::type::reg: {
+                    auto value = get_register_value_from_dwarf_register(pid, result.value);
+                    std::cout << at_name(die) << " (reg " << result.value << ") = " << value << std::endl;
+                    break;
+                }
+                default:
+                    throw std::runtime_error{ "[read_variables] Unhandled variable location" };
+                }
+            }
+        }
+    }
+}
+
 void dbg::Debugger::print_backtrace()
 {
     auto _at_name = [](const auto _func) {
@@ -515,17 +554,10 @@ void dbg::Debugger::print_backtrace()
     };
     auto output_frame = [ frame_number = 0, &_at_name ](auto&& func) mutable
     {
-        auto low_pc = [](const auto _func) {
-            try {
-                return dwarf::at_low_pc(_func);
-            } catch (const std::out_of_range& e) {
-                return dwarf::taddr{ 0 };
-            }
-        };
-        if (func) {
-            std::cout << "frame #" << frame_number++ << ": 0x" << low_pc(*func)
-                      << ' ' << _at_name(*func) << std::endl;
-        } else {
+        try {
+            std::cout << "frame #" << frame_number++ << ": 0x" << dwarf::at_low_pc(func)
+                      << ' ' << _at_name(func) << std::endl;
+        } catch (const std::out_of_range& e) {
             std::cout << "frame #" << frame_number++ << ": 0x[DEBUG INFO NOT FOUND] " << std::endl;
         }
     };
@@ -536,7 +568,7 @@ void dbg::Debugger::print_backtrace()
     auto frame_pointer = get_register_value(pid, Reg::rbp);
     auto return_address = read_memory(frame_pointer + 8);
 
-    while (_at_name(*current_func) != "main") {
+    while (_at_name(current_func) != "main") {
         current_func = get_function_from_program_counter(return_address - static_cast<std::uint64_t>(base_offset));
         output_frame(current_func);
         frame_pointer = read_memory(frame_pointer);

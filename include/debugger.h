@@ -4,7 +4,6 @@
 #include <dwarf/dwarf++.hh>
 #include <elf/elf++.hh>
 #include <fcntl.h>
-#include <optional>
 #include <string>
 #include <unistd.h>
 #include <unordered_map>
@@ -50,16 +49,18 @@ public:
     void set_breakpoint_at_source_line(const std::string& file, const std::uint32_t line);
 
     std::vector<Symbol> lookup_symbol(const std::string& name) const;
+    std::vector<std::string> all_source_files();
+    void read_variables() const;
 
     void dump_registers();
-    std::uint64_t read_memory(std::uint64_t address);
+    std::uint64_t read_memory(std::uint64_t address) const;
     void write_memory(std::uint64_t address, std::uint64_t value);
-    std::uint64_t get_program_counter();
-    std::uint64_t get_program_counter_minus_offset();
+    std::uint64_t get_program_counter() const;
+    std::uint64_t get_program_counter_minus_offset() const;
     std::intptr_t get_program_counteri();
     void set_program_counter(std::uint64_t pc);
     void step_over_breakpoint();
-    std::optional<dwarf::die> get_function_from_program_counter(std::uint64_t program_counter);
+    dwarf::die get_function_from_program_counter(std::uint64_t program_counter) const;
     dwarf::line_table::iterator get_line_entry_from_program_counter(std::uint64_t program_counter);
     void print_source(const std::string& file_name, std::uint32_t line, std::uint32_t n_lines_context = 2);
 
@@ -67,8 +68,6 @@ public:
     void step_out();
     void step_in();
     void step_over();
-
-    std::vector<std::string> all_source_files();
 
     void print_backtrace();
 };
