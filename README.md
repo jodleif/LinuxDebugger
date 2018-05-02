@@ -5,6 +5,8 @@ Based on tutorial series found [here](https://blog.tartanllama.xyz/writing-a-lin
 ### Dependencies
 
 Dependencies are included in submodules folder (remember to initialize submodules).
+In addition libexplain is used to add somewhat `useful` interpretations of 
+ptrace error codes
 
 ### Compiler
 

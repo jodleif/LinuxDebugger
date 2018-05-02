@@ -440,7 +440,7 @@ void dbg::Debugger::step_in()
 void dbg::Debugger::step_over()
 {
     std::uint64_t func_entry, func_end{};
-    auto ofunc = get_function_from_program_counter(get_program_counter());
+    auto ofunc = get_function_from_program_counter(get_program_counter() - base_offset);
     dwarf::die func;
     if (ofunc) {
         func = *ofunc;
@@ -460,12 +460,13 @@ void dbg::Debugger::step_over()
         return;
     }
     auto line = get_line_entry_from_program_counter(func_entry);
-    auto start_line = get_line_entry_from_program_counter(get_program_counter());
+    auto start_line = get_line_entry_from_program_counter(get_program_counter() - base_offset);
 
     std::vector<std::intptr_t> to_delete{};
 
     while (line->address < func_end) {
-        if (auto laddr = static_cast<std::intptr_t>(line->address); line->address != start_line->address && (breakpoints.count(laddr) == 0)) {
+        if (auto laddr = static_cast<std::intptr_t>(line->address) + base_offset;
+            line->address != start_line->address && (breakpoints.count(laddr) == 0)) {
             set_breakpoint_at_address(laddr);
             to_delete.push_back(laddr);
         }
