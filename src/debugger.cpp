@@ -91,13 +91,13 @@ void dbg::Debugger::handle_command(const std::string& line)
         for (const auto& s : syms) {
             std::cout << s.name << ' ' << to_string(s.type) << " 0x" << std::hex << s.addr << std::endl;
         }
-    } else if (is_prefix(command, "stepi")) {
-        single_step_instruction_with_breakpoint_check();
-        auto line_entry = get_line_entry_from_program_counter(get_program_counter());
-        print_source(line_entry->file->path, line_entry->line, 2);
-    } else if (is_prefix(command, "step")) {
+    } else if (command == "step") {
         step_in();
-    } else if (is_prefix(command, "next")) {
+    } else if (command == "stepi") {
+        single_step_instruction_with_breakpoint_check();
+        auto line_entry = get_line_entry_from_program_counter(get_program_counter() - base_offset);
+        print_source(line_entry->file->path, line_entry->line, 2);
+    } else if (command == "next") {
         step_over();
     } else if (is_prefix(command, "finish")) {
         step_out();
@@ -167,7 +167,7 @@ void dbg::Debugger::set_breakpoint_at_function(const std::string& name)
                 auto low_pc = at_low_pc(die);
                 auto entry = get_line_entry_from_program_counter(low_pc);
                 ++entry; // skip prologue
-                set_breakpoint_at_address(static_cast<std::intptr_t>(entry->address));
+                set_breakpoint_at_address(static_cast<std::intptr_t>(entry->address) + base_offset);
             }
         }
     }
@@ -181,7 +181,7 @@ void dbg::Debugger::set_breakpoint_at_source_line(const std::string& file, const
 
             for (const auto& entry : lt) {
                 if (entry.is_stmt && entry.line == line) {
-                    set_breakpoint_at_address(static_cast<std::intptr_t>(entry.address));
+                    set_breakpoint_at_address(static_cast<std::intptr_t>(entry.address) + base_offset);
                     return;
                 }
             }
@@ -189,7 +189,7 @@ void dbg::Debugger::set_breakpoint_at_source_line(const std::string& file, const
     }
 }
 
-std::vector<dbg::Symbol> dbg::Debugger::lookup_symbol(const std::string& name)
+std::vector<dbg::Symbol> dbg::Debugger::lookup_symbol(const std::string& name) const
 {
     std::vector<Symbol> syms;
 
@@ -298,7 +298,7 @@ void dbg::Debugger::handle_sigtrap(siginfo_t info)
     case TRAP_BRKPT: {
         set_program_counter(get_program_counter() - 1);
         std::cout << "Hit breakpoint at address 0x" << std::hex << get_program_counter() << std::endl;
-        auto line_entry = get_line_entry_from_program_counter(get_program_counter());
+        auto line_entry = get_line_entry_from_program_counter(get_program_counter() - base_offset);
         print_source(line_entry->file->path, line_entry->line);
         return;
     }
@@ -315,20 +315,39 @@ void dbg::Debugger::single_step_instruction()
     wait_for_signal();
 }
 
-dwarf::die dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter)
+bool dbg::Debugger::determine_if_aslr_offset() const
+{
+    auto x = lookup_symbol("main");
+    if (!x.empty()) {
+        auto& a = *x.begin();
+        std::cerr << "Determining if aslr_offset needs to be applied: 0x" << std::hex << a.addr << '\n';
+        if (a.addr < 0x400000) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<dwarf::die> dbg::Debugger::get_function_from_program_counter(std::uint64_t program_counter)
 {
     for (auto& cu : dwarf.compilation_units()) {
         if (die_pc_range(cu.root()).contains(program_counter)) {
             for (const auto& die : cu.root()) {
-                if (die.tag == dwarf::DW_TAG::subprogram) {
-                    if (die_pc_range(die).contains(program_counter)) {
-                        return die;
+                if (die.tag == dwarf::DW_TAG::subprogram || die.tag == dwarf::DW_TAG::inlined_subroutine) {
+                    try {
+                        // This way of checking is shown in examples of libelfin
+                        // (you can expect a ratio of 10:1 exceptions to matches)
+                        if (dwarf::die_pc_range(die).contains(program_counter)) {
+                            return std::make_optional(die);
+                        }
+                    } catch (const std::exception& e) {
+                        // nasty
                     }
                 }
             }
         }
     }
-    throw std::out_of_range{ "Cannot find function" };
+    return {};
 }
 
 dwarf::line_table::iterator dbg::Debugger::get_line_entry_from_program_counter(const std::uint64_t program_counter)
@@ -408,22 +427,31 @@ void dbg::Debugger::step_out()
 
 void dbg::Debugger::step_in()
 {
-    auto line = get_line_entry_from_program_counter(get_program_counter())->line;
+    auto line = get_line_entry_from_program_counter(get_program_counter() - base_offset)->line;
 
-    while (get_line_entry_from_program_counter(get_program_counter())->line == line) {
+    while (get_line_entry_from_program_counter(get_program_counter() - base_offset)->line == line) {
         single_step_instruction_with_breakpoint_check();
     }
 
-    auto line_entry = get_line_entry_from_program_counter(get_program_counter());
+    auto line_entry = get_line_entry_from_program_counter(get_program_counter() - base_offset);
     print_source(line_entry->file->path, line_entry->line);
 }
 
 void dbg::Debugger::step_over()
 {
-    dwarf::die func;
     std::uint64_t func_entry, func_end{};
+    auto ofunc = get_function_from_program_counter(get_program_counter());
+    dwarf::die func;
+    if (ofunc) {
+        func = *ofunc;
+    } else {
+        if constexpr (debug) {
+            std::cerr << "[step_over] "
+                      << "cannot find function\n";
+        }
+        return;
+    }
     try {
-        func = get_function_from_program_counter(get_program_counter());
         func_entry = at_low_pc(func);
         func_end = at_high_pc(func);
     } catch (std::out_of_range& exp) {
@@ -469,27 +497,40 @@ std::vector<std::string> dbg::Debugger::all_source_files()
 
 void dbg::Debugger::print_backtrace()
 {
-    auto output_frame = [frame_number = 0](auto&& func) mutable
+    auto _at_name = [](const auto _func) {
+        try {
+            return dwarf::at_name(_func);
+        } catch (const std::exception& e) {
+            using namespace std::string_literals;
+            std::cerr << "[backtrace] " << e.what() << '\n';
+            return "UNKNOWN"s;
+        }
+    };
+    auto output_frame = [ frame_number = 0, &_at_name ](auto&& func) mutable
     {
-        auto low_pc = [&func]() {
+        auto low_pc = [](const auto _func) {
             try {
-                return dwarf::at_low_pc(func);
+                return dwarf::at_low_pc(_func);
             } catch (const std::out_of_range& e) {
                 return dwarf::taddr{ 0 };
             }
         };
-        std::cout << "frame #" << frame_number++ << ": 0x" << low_pc()
-                  << ' ' << dwarf::at_name(func) << std::endl;
+        if (func) {
+            std::cout << "frame #" << frame_number++ << ": 0x" << low_pc(*func)
+                      << ' ' << _at_name(*func) << std::endl;
+        } else {
+            std::cout << "frame #" << frame_number++ << ": 0x[DEBUG INFO NOT FOUND] " << std::endl;
+        }
     };
 
-    auto current_func = get_function_from_program_counter(get_program_counter());
+    auto current_func = get_function_from_program_counter(get_program_counter() - base_offset);
     output_frame(current_func);
 
     auto frame_pointer = get_register_value(pid, Reg::rbp);
     auto return_address = read_memory(frame_pointer + 8);
 
-    while (dwarf::at_name(current_func) != "main") {
-        current_func = get_function_from_program_counter(return_address);
+    while (_at_name(*current_func) != "main") {
+        current_func = get_function_from_program_counter(return_address - base_offset);
         output_frame(current_func);
         frame_pointer = read_memory(frame_pointer);
         return_address = read_memory(frame_pointer + 8);
