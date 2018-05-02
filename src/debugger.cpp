@@ -95,7 +95,7 @@ void dbg::Debugger::handle_command(const std::string& line)
         step_in();
     } else if (command == "stepi") {
         single_step_instruction_with_breakpoint_check();
-        auto line_entry = get_line_entry_from_program_counter(get_program_counter() - base_offset);
+        auto line_entry = get_line_entry_from_program_counter(get_program_counter_minus_offset());
         print_source(line_entry->file->path, line_entry->line, 2);
     } else if (command == "next") {
         step_over();
@@ -246,6 +246,11 @@ std::uint64_t dbg::Debugger::get_program_counter()
     return get_register_value(pid, Reg::rip);
 }
 
+std::uint64_t dbg::Debugger::get_program_counter_minus_offset()
+{
+    return get_program_counter() - static_cast<std::uint64_t>(base_offset);
+}
+
 std::intptr_t dbg::Debugger::get_program_counteri()
 {
     return static_cast<std::intptr_t>(get_program_counter());
@@ -298,7 +303,7 @@ void dbg::Debugger::handle_sigtrap(siginfo_t info)
     case TRAP_BRKPT: {
         set_program_counter(get_program_counter() - 1);
         std::cout << "Hit breakpoint at address 0x" << std::hex << get_program_counter() << std::endl;
-        auto line_entry = get_line_entry_from_program_counter(get_program_counter() - base_offset);
+        auto line_entry = get_line_entry_from_program_counter(get_program_counter_minus_offset());
         print_source(line_entry->file->path, line_entry->line);
         return;
     }
@@ -427,20 +432,20 @@ void dbg::Debugger::step_out()
 
 void dbg::Debugger::step_in()
 {
-    auto line = get_line_entry_from_program_counter(get_program_counter() - base_offset)->line;
+    auto line = get_line_entry_from_program_counter(get_program_counter_minus_offset())->line;
 
-    while (get_line_entry_from_program_counter(get_program_counter() - base_offset)->line == line) {
+    while (get_line_entry_from_program_counter(get_program_counter_minus_offset())->line == line) {
         single_step_instruction_with_breakpoint_check();
     }
 
-    auto line_entry = get_line_entry_from_program_counter(get_program_counter() - base_offset);
+    auto line_entry = get_line_entry_from_program_counter(get_program_counter_minus_offset());
     print_source(line_entry->file->path, line_entry->line);
 }
 
 void dbg::Debugger::step_over()
 {
     std::uint64_t func_entry, func_end{};
-    auto ofunc = get_function_from_program_counter(get_program_counter() - base_offset);
+    auto ofunc = get_function_from_program_counter(get_program_counter_minus_offset());
     dwarf::die func;
     if (ofunc) {
         func = *ofunc;
@@ -460,11 +465,12 @@ void dbg::Debugger::step_over()
         return;
     }
     auto line = get_line_entry_from_program_counter(func_entry);
-    auto start_line = get_line_entry_from_program_counter(get_program_counter() - base_offset);
+    auto start_line = get_line_entry_from_program_counter(get_program_counter_minus_offset());
 
     std::vector<std::intptr_t> to_delete{};
 
     while (line->address < func_end) {
+        // In memory we're at line->address + base_offset
         if (auto laddr = static_cast<std::intptr_t>(line->address) + base_offset;
             line->address != start_line->address && (breakpoints.count(laddr) == 0)) {
             set_breakpoint_at_address(laddr);
@@ -524,14 +530,14 @@ void dbg::Debugger::print_backtrace()
         }
     };
 
-    auto current_func = get_function_from_program_counter(get_program_counter() - base_offset);
+    auto current_func = get_function_from_program_counter(get_program_counter_minus_offset());
     output_frame(current_func);
 
     auto frame_pointer = get_register_value(pid, Reg::rbp);
     auto return_address = read_memory(frame_pointer + 8);
 
     while (_at_name(*current_func) != "main") {
-        current_func = get_function_from_program_counter(return_address - base_offset);
+        current_func = get_function_from_program_counter(return_address - static_cast<std::uint64_t>(base_offset));
         output_frame(current_func);
         frame_pointer = read_memory(frame_pointer);
         return_address = read_memory(frame_pointer + 8);

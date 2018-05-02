@@ -55,6 +55,7 @@ public:
     std::uint64_t read_memory(std::uint64_t address);
     void write_memory(std::uint64_t address, std::uint64_t value);
     std::uint64_t get_program_counter();
+    std::uint64_t get_program_counter_minus_offset();
     std::intptr_t get_program_counteri();
     void set_program_counter(std::uint64_t pc);
     void step_over_breakpoint();
